@@ -614,5 +614,26 @@ typedef void (^FBSessionReauthorizeResultHandler)(FBSession *session,
  overridden on a per session basis.
  */
 + (NSString*)defaultAppID;
+
+
+
+
+
++ (BOOL)openMixoTVActiveSessionWithReadPermissions:(NSArray*)readPermissions
+                                      allowLoginUI:(BOOL)allowLoginUI
+                                 completionHandler:(FBSessionStateHandler)handler;
+
++ (BOOL)openMixoTVActiveSessionWithPublishPermissions:(NSArray*)publishPermissions
+                                      defaultAudience:(FBSessionDefaultAudience)defaultAudience
+                                         allowLoginUI:(BOOL)allowLoginUI
+                                    completionHandler:(FBSessionStateHandler)handler;
+
++ (BOOL)openMixoTVActiveSessionWithPermissions:(NSArray*)permissions
+                                  allowLoginUI:(BOOL)allowLoginUI
+                            allowSystemAccount:(BOOL)allowSystemAccount
+                                        isRead:(BOOL)isRead
+                               defaultAudience:(FBSessionDefaultAudience)defaultAudience
+                             completionHandler:(FBSessionStateHandler)handler;
+
     
 @end

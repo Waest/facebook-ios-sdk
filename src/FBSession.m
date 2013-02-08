@@ -1758,4 +1758,116 @@ static FBSession *g_activeSession = nil;
 
 #pragma mark -
 
++ (BOOL)openMixoTVActiveSessionWithReadPermissions:(NSArray*)readPermissions
+                                allowLoginUI:(BOOL)allowLoginUI
+                           completionHandler:(FBSessionStateHandler)handler {
+    return [FBSession openMixoTVActiveSessionWithPermissions:readPermissions
+                                          allowLoginUI:allowLoginUI
+                                    allowSystemAccount:YES
+                                                isRead:YES
+                                       defaultAudience:FBSessionDefaultAudienceNone
+                                     completionHandler:handler];
+}
+
++ (BOOL)openMixoTVActiveSessionWithPublishPermissions:(NSArray*)publishPermissions
+                                defaultAudience:(FBSessionDefaultAudience)defaultAudience
+                                   allowLoginUI:(BOOL)allowLoginUI
+                              completionHandler:(FBSessionStateHandler)handler {
+    return [FBSession openMixoTVActiveSessionWithPermissions:publishPermissions
+                                          allowLoginUI:allowLoginUI
+                                    allowSystemAccount:YES
+                                                isRead:NO
+                                       defaultAudience:defaultAudience
+                                     completionHandler:handler];
+}
+
++ (BOOL)openMixoTVActiveSessionWithPermissions:(NSArray*)permissions
+                                  allowLoginUI:(BOOL)allowLoginUI
+                            allowSystemAccount:(BOOL)allowSystemAccount
+                                        isRead:(BOOL)isRead
+                               defaultAudience:(FBSessionDefaultAudience)defaultAudience
+                             completionHandler:(FBSessionStateHandler)handler {
+    // is everything in good order?
+    [FBSession validateRequestForPermissions:permissions
+                             defaultAudience:defaultAudience
+                          allowSystemAccount:allowSystemAccount
+                                      isRead:isRead];
+    BOOL result = NO;
+    FBSession *session = [[[FBSession alloc] initWithAppID:nil
+                                               permissions:permissions
+                                           defaultAudience:defaultAudience
+                                           urlSchemeSuffix:nil
+                                        tokenCacheStrategy:nil]
+                          autorelease];
+    if (allowLoginUI || session.state == FBSessionStateCreatedTokenLoaded) {
+        [FBSession setActiveSession:session];
+        // we open after the fact, in order to avoid overlapping close
+        // and open handler calls for blocks
+        FBSessionLoginBehavior howToBehave = allowSystemAccount ?
+        FBSessionLoginBehaviorUseSystemAccountIfPresent :
+        FBSessionLoginBehaviorWithFallbackToWebView;
+        [session openWithMixoTVBehavior:howToBehave
+                      completionHandler:handler];
+        result = session.isOpen;
+    }
+    return result;
+}
+
+- (void)openWithMixoTVBehavior:(FBSessionLoginBehavior)behavior
+             completionHandler:(FBSessionStateHandler)handler {
+    
+    NSAssert(self.affinitizedThread == [NSThread currentThread], @"FBSession: should only be used from a single thread");
+    
+    if (!(self.state == FBSessionStateCreated ||
+          self.state == FBSessionStateCreatedTokenLoaded)) {
+        // login may only be called once, and only from one of the two initial states
+        [[NSException exceptionWithName:FBInvalidOperationException
+                                 reason:@"FBSession: an attempt was made to open an already opened or closed session"
+                               userInfo:nil]
+         raise];
+    }
+    self.loginHandler = handler;
+    
+    // normal login depends on the availability of a valid cached token
+    if (self.state == FBSessionStateCreated) {
+        
+        // set the state and token info
+        [self transitionToState:FBSessionStateCreatedOpening
+                 andUpdateToken:nil
+              andExpirationDate:nil
+                    shouldCache:NO
+                      loginType:FBSessionLoginTypeNone];
+        
+        [self authorizeMixoTVWithPermissions:self.permissions
+                                    behavior:behavior
+                             defaultAudience:_defaultDefaultAudience
+                               isReauthorize:NO];
+        
+    } else { // self.status == FBSessionStateLoadedValidToken
+        
+        // this case implies that a valid cached token was found, and preserves the
+        // "1-session-1-identity" rule, by transitioning to logged in, without a transition to login UX
+        [self transitionAndCallHandlerWithState:FBSessionStateOpen
+                                          error:nil
+                                          token:nil
+                                 expirationDate:nil
+                                    shouldCache:NO
+                                      loginType:FBSessionLoginTypeNone];
+    }
+}
+
+- (void)authorizeMixoTVWithPermissions:(NSArray*)permissions
+                              behavior:(FBSessionLoginBehavior)behavior
+                       defaultAudience:(FBSessionDefaultAudience)audience
+                         isReauthorize:(BOOL)isReauthorize {
+    
+    [self authorizeWithPermissions:(NSArray*)permissions
+                   defaultAudience:audience
+                    integratedAuth:YES
+                         FBAppAuth:NO
+                        safariAuth:NO
+                          fallback:NO
+                     isReauthorize:isReauthorize];
+}
+
 @end
